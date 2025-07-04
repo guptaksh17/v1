@@ -1,5 +1,7 @@
 
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { toast } from 'react-hot-toast';
+import { CheckoutResponse } from '@/types/checkout';
 
 export interface CartItem {
   id: string;
@@ -11,11 +13,14 @@ export interface CartItem {
 
 interface CartContextType {
   items: CartItem[];
-  addToCart: (item: Omit<CartItem, 'quantity'>) => void;
-  removeFromCart: (id: string) => void;
-  updateQuantity: (id: string, quantity: number) => void;
-  clearCart: () => void;
   total: number;
+  isProcessing: boolean;
+  setIsProcessing: (isProcessing: boolean) => void;
+  addToCart: (item: Omit<CartItem, 'quantity'>) => void;
+  removeFromCart: (productId: string) => void;
+  updateQuantity: (productId: string, quantity: number) => void;
+  clearCart: () => void;
+  processCheckout: () => Promise<CheckoutResponse>;
   itemCount: number;
 }
 
@@ -29,8 +34,25 @@ export const useCart = () => {
   return context;
 };
 
+const CART_STORAGE_KEY = 'retail_purpose_cart';
+
 export const CartProvider = ({ children }: { children: ReactNode }) => {
-  const [items, setItems] = useState<CartItem[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [items, setItems] = useState<CartItem[]>(() => {
+    // Load cart from localStorage on initial render
+    if (typeof window !== 'undefined') {
+      const savedCart = localStorage.getItem(CART_STORAGE_KEY);
+      return savedCart ? JSON.parse(savedCart) : [];
+    }
+    return [];
+  });
+
+  // Save cart to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
+    }
+  }, [items]);
 
   const addToCart = (newItem: Omit<CartItem, 'quantity'>) => {
     setItems(prev => {
@@ -62,22 +84,74 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     );
   };
 
-  const clearCart = () => {
+  const clearCart = useCallback(() => {
     setItems([]);
+  }, []);
+
+  const processCheckout = async (): Promise<CheckoutResponse> => {
+    if (items.length === 0) {
+      return { success: false, error: 'Your cart is empty' };
+    }
+
+    setIsProcessing(true);
+    
+    try {
+      // Get the auth token from localStorage if it exists
+      const token = typeof window !== 'undefined' ? localStorage.getItem('supabase.auth.token') : null;
+      
+      // Mock API call - in a real app, this would be a real API endpoint
+      console.log('Making checkout request with items:', items);
+      
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Mock successful response
+      const mockResponse = {
+        success: true,
+        orderId: `ORDER-${Date.now()}`,
+        message: 'Order placed successfully',
+        items,
+        total: calculateTotal(),
+        timestamp: new Date().toISOString()
+      };
+      
+      console.log('Checkout successful:', mockResponse);
+      
+      // Clear cart on successful checkout
+      clearCart();
+      
+      // Return the mock response
+      return mockResponse;
+      
+    } catch (error) {
+      console.error('Checkout error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred during checkout';
+      toast.error(errorMessage);
+      return { 
+        success: false, 
+        error: errorMessage,
+        orderId: null
+      };
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const calculateTotal = () => items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
     <CartContext.Provider value={{
       items,
+      total: calculateTotal(),
+      isProcessing,
+      setIsProcessing,
       addToCart,
       removeFromCart,
       updateQuantity,
       clearCart,
-      total,
-      itemCount
+      processCheckout,
+      itemCount,
     }}>
       {children}
     </CartContext.Provider>

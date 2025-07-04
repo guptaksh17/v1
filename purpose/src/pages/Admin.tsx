@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useUser } from '@supabase/auth-helpers-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import Header from '@/components/Header';
 import { useToast } from '@/hooks/use-toast';
@@ -332,8 +332,8 @@ const NotAuthorized = () => (
 const AdminContent = ({ products, setProducts }: { products: Product[], setProducts: React.Dispatch<React.SetStateAction<Product[]>> }) => {
   // Authentication and navigation
   const user = useUser();
-  const navigate = useNavigate();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   // State for UI only
   const [isLoadingProduct, setIsLoadingProduct] = useState(false);
@@ -733,11 +733,12 @@ const AdminContent = ({ products, setProducts }: { products: Product[], setProdu
         </div>
 
         <Tabs defaultValue="dashboard" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
             <TabsTrigger value="inventory">Inventory</TabsTrigger>
             <TabsTrigger value="add-product">Add Product</TabsTrigger>
             <TabsTrigger value="orders">Orders</TabsTrigger>
+            <TabsTrigger value="forecast">Forecast</TabsTrigger>
           </TabsList>
 
           <TabsContent value="dashboard" className="space-y-6">
@@ -1669,6 +1670,52 @@ const AdminContent = ({ products, setProducts }: { products: Product[], setProdu
             <div className="bg-white p-6 rounded-lg shadow-sm border">
               <h3 className="text-lg font-semibold mb-4">Order Management</h3>
               <p className="text-gray-500">Order management functionality will be available soon.</p>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="forecast">
+            <div className="bg-white p-6 rounded-lg shadow-sm border">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-lg font-semibold">Demand Forecasting</h3>
+                  <p className="text-gray-500">AI-powered demand predictions for inventory planning</p>
+                </div>
+                <Link to="/admin/forecast" className="block" onClick={() => console.log('Navigating to /admin/forecast')}>
+                  <Button className="bg-[#0071CE] hover:bg-blue-700 w-full">
+                    Open Forecast Dashboard
+                  </Button>
+                </Link>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <h4 className="font-medium text-blue-900 mb-2">What is Demand Forecasting?</h4>
+                  <p className="text-sm text-blue-700">
+                    Our AI system analyzes historical sales data to predict future demand for your products. 
+                    This helps you optimize inventory levels and reduce stockouts or overstock situations.
+                  </p>
+                </div>
+                
+                <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                  <h4 className="font-medium text-green-900 mb-2">Benefits</h4>
+                  <ul className="text-sm text-green-700 space-y-1">
+                    <li>• Reduce inventory costs</li>
+                    <li>• Prevent stockouts</li>
+                    <li>• Optimize reorder timing</li>
+                    <li>• Improve cash flow</li>
+                  </ul>
+                </div>
+              </div>
+              
+              <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                <h4 className="font-medium text-gray-900 mb-2">How it works</h4>
+                <ol className="text-sm text-gray-700 space-y-1">
+                  <li>1. Select a product from your inventory</li>
+                  <li>2. Choose the forecast period (weeks)</li>
+                  <li>3. View AI-generated predictions with confidence intervals</li>
+                  <li>4. Use the data to make informed inventory decisions</li>
+                </ol>
+              </div>
             </div>
           </TabsContent>
         </Tabs>

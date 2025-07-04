@@ -1,15 +1,18 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ShoppingCart } from 'lucide-react';
 import Header from '../components/Header';
 import ProductCard from '../components/ProductCard';
 import { Filter, ChevronDown } from 'lucide-react';
 import { supabase } from '../integrations/supabase/client';
 import { Product } from '../lib/products';
+import { useCart } from '@/contexts/CartContext';
+import { toast } from 'react-hot-toast';
 
 const Shop = () => {
   const navigate = useNavigate();
+  const { addToCart } = useCart();
   const [isLoading, setIsLoading] = useState(true);
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
@@ -17,6 +20,22 @@ const Shop = () => {
     category: '',
     priceRange: ''
   });
+
+  const handleAddToCart = (e: React.MouseEvent, product: Product) => {
+    e.stopPropagation();
+    try {
+      addToCart({
+        id: product.id,
+        name: product.name,
+        price: product.price || 0,
+        image: product.image || '',
+      });
+      toast.success(`${product.name} added to cart`);
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+      toast.error('Failed to add item to cart');
+    }
+  };
 
   // Fetch products from Supabase
   useEffect(() => {
@@ -223,11 +242,7 @@ const Shop = () => {
                         product={product}
                         className="cursor-pointer group"
                         onClick={() => navigate(`/product/${product.id}`)}
-                        onAddToCart={(e) => {
-                          e.stopPropagation();
-                          // TODO: Implement add to cart functionality
-                          console.log('Add to cart:', product);
-                        }}
+                        onAddToCart={handleAddToCart}
                       />
                     </div>
                   ))}

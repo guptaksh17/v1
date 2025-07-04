@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { Minus, Plus, Trash2, ShoppingBag } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import {
   Sheet,
   SheetContent,
@@ -8,6 +9,7 @@ import {
   SheetHeader,
   SheetTitle,
   SheetTrigger,
+  SheetClose,
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/contexts/CartContext';
@@ -17,7 +19,14 @@ interface CartDrawerProps {
 }
 
 const CartDrawer = ({ children }: CartDrawerProps) => {
+  const navigate = useNavigate();
   const { items, updateQuantity, removeFromCart, total, clearCart } = useCart();
+  
+  const handleCheckout = () => {
+    if (items.length > 0) {
+      navigate('/checkout');
+    }
+  };
 
   return (
     <Sheet>
@@ -93,9 +102,15 @@ const CartDrawer = ({ children }: CartDrawerProps) => {
                   <span>Total: ${total.toFixed(2)}</span>
                 </div>
                 <div className="space-y-2">
-                  <Button className="w-full bg-[#0071CE] hover:bg-blue-700">
-                    Checkout
-                  </Button>
+                  <SheetClose asChild>
+                    <Button 
+                      className="w-full bg-[#0071CE] hover:bg-blue-700"
+                      onClick={handleCheckout}
+                      disabled={items.length === 0}
+                    >
+                      Proceed to Checkout
+                    </Button>
+                  </SheetClose>
                   <Button
                     variant="outline"
                     className="w-full"

@@ -125,6 +125,52 @@ export type Database = {
         }
         Relationships: []
       }
+      orders: {
+        Row: {
+          id: string;
+          product_id: string;
+          user_id: string | null;
+          quantity: number;
+          price: number;
+          order_timestamp: string;
+          product_category: string | null;
+          product_name: string | null;
+        };
+        Insert: {
+          id?: string;
+          product_id: string;
+          user_id?: string | null;
+          quantity: number;
+          price: number;
+          order_timestamp?: string;
+          product_category?: string | null;
+          product_name?: string | null;
+        };
+        Update: {
+          id?: string;
+          product_id?: string;
+          user_id?: string | null;
+          quantity?: number;
+          price?: number;
+          order_timestamp?: string;
+          product_category?: string | null;
+          product_name?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "orders_product_id_fkey",
+            columns: ["product_id"],
+            referencedRelation: "products",
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "orders_user_id_fkey",
+            columns: ["user_id"],
+            referencedRelation: "profiles",
+            referencedColumns: ["id"]
+          }
+        ];
+      }
     }
     Views: {
       [_ in never]: never
