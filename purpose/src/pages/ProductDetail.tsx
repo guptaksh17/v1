@@ -19,6 +19,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { Product } from '@/lib/products';
 import { toast } from 'react-hot-toast';
 import { getFootprintDescription, calculateProductFootprint } from '@/lib/carbonFootprint';
+import EcoScoreBadge from '@/components/EcoScoreBadge';
+import EcoRecommendations from '@/components/EcoRecommendations';
+import Reviews from '@/components/Reviews';
+import { calculateDynamicPricing, getDiscountBadgeColor, getUrgencyMessage, formatPrice } from '@/lib/dynamicPricing';
+import { fetchProductRating, ProductRating } from '@/lib/reviews';
 
 interface FootprintInfo {
   label: string;
@@ -32,22 +37,20 @@ const ProductDetail = () => {
   
   // State management
   const [product, setProduct] = useState<Product | null>(null);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedTab, setSelectedTab] = useState('description');
   const [quantity, setQuantity] = useState(1);
+  const [reviewCount, setReviewCount] = useState(0);
+  const [productRating, setProductRating] = useState<ProductRating | null>(null);
   const carbonFootprint = product?.carbon_footprint ?? null;
 
-  // Calculate if product is on sale
-  const isOnSale = useMemo(() => {
-    if (!product?.expiration_date) return false;
-    return new Date(product.expiration_date).getTime() - Date.now() < 7 * 24 * 60 * 60 * 1000;
+  // Calculate dynamic pricing
+  const pricing = useMemo(() => {
+    if (!product) return null;
+    return calculateDynamicPricing(product);
   }, [product]);
-
-  // Calculate original price if on sale
-  const originalPrice = useMemo(() => {
-    return isOnSale && product?.price ? Math.round(product.price * 1.25) : undefined;
-  }, [isOnSale, product?.price]);
 
   // Get footprint info
   const displayFootprintInfo = useMemo(() => {
@@ -55,9 +58,9 @@ const ProductDetail = () => {
     return null;
   }, [carbonFootprint]);
 
-  // Fetch product data
+  // Fetch product data and all products for recommendations
   useEffect(() => {
-    const fetchProduct = async () => {
+    const fetchData = async () => {
       if (!id) {
         setError('Product ID is missing');
         setLoading(false);
@@ -66,21 +69,54 @@ const ProductDetail = () => {
 
       try {
         setLoading(true);
-        const { data, error } = await supabase
+        
+        // Fetch current product
+        const { data: productData, error: productError } = await supabase
           .from('products')
           .select('*')
           .eq('id', id)
           .single();
 
-        if (error) throw error;
-        if (!data) throw new Error('Product not found');
+        if (productError) throw productError;
+        if (!productData) throw new Error('Product not found');
 
         // Ensure carbon_footprint_breakdown is the correct type
-        let productData = data as unknown as Product;
-        if (productData.carbon_footprint_breakdown && typeof productData.carbon_footprint_breakdown === 'object') {
-          productData.carbon_footprint_breakdown = productData.carbon_footprint_breakdown as Product['carbon_footprint_breakdown'];
+        let product = productData as unknown as Product;
+        if (product.carbon_footprint_breakdown && typeof product.carbon_footprint_breakdown === 'object') {
+          product.carbon_footprint_breakdown = product.carbon_footprint_breakdown as Product['carbon_footprint_breakdown'];
         }
-        setProduct(productData);
+        setProduct(product);
+
+        // Fetch all products for recommendations
+        const { data: allProductsData, error: allProductsError } = await supabase
+          .from('products')
+          .select('*')
+          .neq('id', id);
+
+        if (allProductsError) {
+          console.error('Error fetching all products:', allProductsError);
+        } else {
+          // Process products to ensure correct typing
+          const processedProducts = (allProductsData || []).map((productData: any) => {
+            let product = productData as Product;
+            if (product.carbon_footprint_breakdown && typeof product.carbon_footprint_breakdown === 'object') {
+              product.carbon_footprint_breakdown = product.carbon_footprint_breakdown as Product['carbon_footprint_breakdown'];
+            }
+            return product;
+          });
+          setAllProducts(processedProducts);
+        }
+
+        // Fetch product rating
+        try {
+          const rating = await fetchProductRating(id);
+          setProductRating(rating);
+          if (rating) {
+            setReviewCount(rating.total_reviews);
+          }
+        } catch (error) {
+          console.error('Error fetching product rating:', error);
+        }
       } catch (err) {
         console.error('Error fetching product:', err);
         setError(err instanceof Error ? err.message : 'Failed to load product');
@@ -90,7 +126,7 @@ const ProductDetail = () => {
       }
     };
 
-    fetchProduct();
+    fetchData();
   }, [id]);
 
   // Handlers
@@ -164,9 +200,9 @@ const ProductDetail = () => {
           <div>
             <div className="mb-4">
               <div className="flex items-center space-x-2 mb-2">
-                {isOnSale && (
-                  <span className="bg-red-500 text-white px-2 py-1 rounded-full text-xs font-bold">
-                    SALE
+                {pricing?.isOnSale && (
+                  <span className={`${getDiscountBadgeColor(pricing.urgencyLevel)} px-2 py-1 rounded-full text-xs font-bold`}>
+                    {pricing.urgencyLevel === 'critical' ? 'URGENT SALE' : 'SALE'}
                   </span>
                 )}
                 {product.stock <= 0 && (
@@ -178,13 +214,35 @@ const ProductDetail = () => {
               <h1 className="text-3xl font-bold text-gray-900 mb-2">{product.name}</h1>
               <p className="text-lg text-gray-600 mb-4">by {product.brand || 'Unknown Brand'}</p>
               
-              <div className="flex items-center space-x-2 mb-4">
-                <div className="flex">
-                  {[1,2,3,4,5].map(i => (
-                    <Star key={i} className={`h-5 w-5 ${i <= 4 ? 'text-yellow-400 fill-current' : 'text-gray-300'}`} />
-                  ))}
+              {/* Enhanced Review Summary */}
+              <div className="flex items-center gap-4 mb-6 p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-100">
+                <div className="flex items-center gap-2">
+                  <div className="flex gap-0.5">
+                    {[1,2,3,4,5].map(i => (
+                      <Star key={i} className={`h-5 w-5 ${i <= (productRating?.average_rating || 0) ? 'text-amber-400 fill-current' : 'text-gray-300'}`} />
+                    ))}
+                  </div>
+                  <div className="ml-2">
+                    <span className="text-lg font-bold text-gray-900">
+                      {productRating?.average_rating.toFixed(1) || '0.0'}
+                    </span>
+                    <span className="text-sm text-gray-600 ml-1">out of 5</span>
+                  </div>
                 </div>
-                <span className="text-gray-600">(234 reviews)</span>
+                <div className="h-6 w-px bg-gray-300"></div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-gray-700">{reviewCount}</span>
+                  <span className="text-sm text-gray-600">customer reviews</span>
+                </div>
+                {reviewCount > 0 && (
+                  <>
+                    <div className="h-6 w-px bg-gray-300"></div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <span className="text-sm text-green-700 font-medium">Verified</span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
             
@@ -192,23 +250,35 @@ const ProductDetail = () => {
             <div className="mb-6">
               <div className="flex items-center space-x-3 mb-2">
                 <span className="text-4xl font-bold text-[#0071CE]">
-                  ₹{product.price?.toLocaleString() || 'N/A'}
+                  {pricing ? formatPrice(pricing.discountedPrice) : formatPrice(product.price || 0)}
                 </span>
-                {isOnSale && originalPrice && (
+                {pricing?.isOnSale && (
                   <>
                     <span className="text-2xl text-gray-500 line-through">
-                      ₹{originalPrice.toLocaleString()}
+                      {formatPrice(pricing.originalPrice)}
                     </span>
-                    <span className="bg-red-100 text-red-800 px-2 py-1 rounded text-sm font-medium">
-                      {Math.round(((originalPrice - (product.price || 0)) / originalPrice) * 100)}% off
+                    <span className={`${getDiscountBadgeColor(pricing.urgencyLevel)} px-2 py-1 rounded text-sm font-medium`}>
+                      {Math.round(pricing.discountPercentage)}% off
                     </span>
                   </>
                 )}
               </div>
-              {isOnSale && originalPrice && product.price && (
-                <p className="text-green-600 font-medium">
-                  You save ₹{(originalPrice - product.price).toLocaleString()}
-                </p>
+              {pricing?.isOnSale && (
+                <div className="space-y-1">
+                  <p className="text-green-600 font-medium">
+                    You save {formatPrice(pricing.discountAmount)}
+                  </p>
+                  {pricing.daysUntilExpiry !== undefined && pricing.daysUntilExpiry > 0 && (
+                    <p className={`text-sm ${pricing.urgencyLevel === 'critical' ? 'text-red-600' : 'text-orange-600'} font-medium`}>
+                      {getUrgencyMessage(pricing.daysUntilExpiry)} - {pricing.daysUntilExpiry} days left
+                    </p>
+                  )}
+                  {pricing.appliedRules.length > 0 && (
+                    <p className="text-xs text-gray-600">
+                      Applied: {pricing.appliedRules.join(', ')}
+                    </p>
+                  )}
+                </div>
               )}
             </div>
             
@@ -224,23 +294,58 @@ const ProductDetail = () => {
                   <p className="text-xs text-gray-600">Carbon Footprint</p>
                 </div>
                 <div className="text-center p-3 border rounded-lg">
-                  <Shield className="h-6 w-6 text-[#0071CE] mx-auto mb-2" />
-                  <p className="text-sm font-medium">9.2/10</p>
-                  <p className="text-xs text-gray-600">Ethical Score</p>
+                  <EcoScoreBadge product={product} size="md" showDescription={true} />
                 </div>
-                <div className="text-center p-3 border rounded-lg">
-                  <Award className="h-6 w-6 text-purple-600 mx-auto mb-2" />
-                  <p className="text-sm font-medium">Fair Trade</p>
-                  <p className="text-xs text-gray-600">Certified</p>
-                </div>
-              </div>
-              
-              <div className="flex flex-wrap gap-2">
-                <span className="bg-[#8BC34A] bg-opacity-10 text-[#8BC34A] px-3 py-1 rounded-full text-sm">♻️ Recycled</span>
-                <span className="bg-[#8BC34A] bg-opacity-10 text-[#8BC34A] px-3 py-1 rounded-full text-sm">🌱 Low Carbon</span>
-                <span className="bg-[#8BC34A] bg-opacity-10 text-[#8BC34A] px-3 py-1 rounded-full text-sm">🧕 Women-led</span>
+                              <div className="text-center p-3 border rounded-lg">
+                <Award className="h-6 w-6 text-purple-600 mx-auto mb-2" />
+                <p className="text-sm font-medium">Fair Trade</p>
+                <p className="text-xs text-gray-600">Certified</p>
               </div>
             </div>
+            
+            {/* Dynamic Tags based on product data */}
+            <div className="flex flex-wrap gap-2">
+              {/* Recycled tag - show if any material is recycled */}
+              {product.sustainability_data?.materials?.some(material => 
+                material.isRecycled || 
+                material.variant === 'recycled' || 
+                material.type?.toLowerCase().includes('recycled')
+              ) && (
+                <span className="bg-[#8BC34A] bg-opacity-10 text-[#8BC34A] px-3 py-1 rounded-full text-sm">♻️ Recycled</span>
+              )}
+              
+              {/* Low Carbon tag - show if carbon footprint is low */}
+              {carbonFootprint && carbonFootprint <= 5 && (
+                <span className="bg-[#8BC34A] bg-opacity-10 text-[#8BC34A] px-3 py-1 rounded-full text-sm">🌱 Low Carbon</span>
+              )}
+              
+              {/* Made in India tag - show if manufacturing location is India */}
+              {product.manufacturing_location && 
+               product.manufacturing_location.toLowerCase().includes('india') && (
+                <span className="bg-[#8BC34A] bg-opacity-10 text-[#8BC34A] px-3 py-1 rounded-full text-sm">🇮🇳 Made in India</span>
+              )}
+              
+              {/* Organic tag - show if any material is organic */}
+              {product.sustainability_data?.materials?.some(material => 
+                material.variant === 'organic' || 
+                material.type?.toLowerCase().includes('organic')
+              ) && (
+                <span className="bg-[#8BC34A] bg-opacity-10 text-[#8BC34A] px-3 py-1 rounded-full text-sm">🌿 Organic</span>
+              )}
+              
+              {/* Women-led tag - show if specified in product data */}
+              {product.sustainability_data?.manufacturing?.location?.toLowerCase().includes('women') && (
+                <span className="bg-[#8BC34A] bg-opacity-10 text-[#8BC34A] px-3 py-1 rounded-full text-sm">👩‍💼 Women-led</span>
+              )}
+              
+              {/* Local tag - show if transport distance is very short */}
+              {product.sustainability_data?.transport?.some(leg => 
+                leg.distance_km <= 50
+              ) && (
+                <span className="bg-[#8BC34A] bg-opacity-10 text-[#8BC34A] px-3 py-1 rounded-full text-sm">🏠 Local</span>
+              )}
+            </div>
+          </div>
             
             {/* Carbon Footprint Badge */}
             {carbonFootprint && displayFootprintInfo && (
@@ -361,7 +466,7 @@ const ProductDetail = () => {
             {[
               { id: 'description', label: 'Description' },
               { id: 'traceability', label: 'Traceability' },
-              { id: 'reviews', label: 'Reviews (234)' },
+              { id: 'reviews', label: `Reviews (${reviewCount})` },
               { id: 'impact', label: 'Impact' }
             ].map(tab => (
               <button
@@ -433,20 +538,11 @@ const ProductDetail = () => {
           )}
           
           {selectedTab === 'reviews' && (
-            <div>
-              <div className="mb-6">
-                <div className="flex items-center space-x-4">
-                  <div className="text-4xl font-bold">4.2</div>
-                  <div>
-                    <div className="flex items-center mb-1">
-                      {[1,2,3,4,5].map(i => (
-                        <Star key={i} className={`h-5 w-5 ${i <= 4 ? 'text-yellow-400 fill-current' : 'text-gray-300'}`} />
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <Reviews 
+              productId={product.id} 
+              productName={product.name} 
+              onReviewCountChange={setReviewCount}
+            />
           )}
           
           {selectedTab === 'impact' && (
@@ -456,6 +552,17 @@ const ProductDetail = () => {
           )}
         </div>
       </div>
+      
+      {/* Eco-Friendly Recommendations */}
+      {allProducts.length > 0 && (
+        <div className="mt-12">
+          <EcoRecommendations 
+            currentProduct={product}
+            allProducts={allProducts}
+            limit={4}
+          />
+        </div>
+      )}
     </div>
   );
 };

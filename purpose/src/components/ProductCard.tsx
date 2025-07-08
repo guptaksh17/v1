@@ -3,6 +3,8 @@ import React from 'react';
 import { ShoppingCart } from 'lucide-react';
 import { Product } from '@/lib/products';
 import { toast } from 'react-hot-toast';
+import EcoScoreBadge from './EcoScoreBadge';
+import { calculateDynamicPricing, getDiscountBadgeColor, formatPrice } from '@/lib/dynamicPricing';
 
 interface ProductCardProps {
   product: Product | null | undefined;
@@ -62,24 +64,8 @@ const ProductCard: React.FC<ProductCardProps> = ({
     expiration_date
   } = product;
 
-  // Safely calculate if product is on sale
-  let isOnSale = false;
-  try {
-    isOnSale = !!expiration_date && 
-      new Date(expiration_date).getTime() - Date.now() < 7 * 24 * 60 * 60 * 1000;
-  } catch (error) {
-    console.error('Error parsing expiration date:', error);
-    isOnSale = false;
-  }
-
-  // Safely calculate original price if on sale
-  let originalPrice: number | undefined;
-  try {
-    originalPrice = isOnSale && price ? Math.round(Number(price) * 1.25) : undefined;
-  } catch (error) {
-    console.error('Error calculating original price:', error);
-    originalPrice = undefined;
-  }
+  // Calculate dynamic pricing
+  const pricing = calculateDynamicPricing(product);
 
   // Safely determine product status
   const isOutOfStock = !stock || stock <= 0;
@@ -105,21 +91,28 @@ const ProductCard: React.FC<ProductCardProps> = ({
         </div>
         
         {/* Product status badges */}
-        {isOnSale && (
-          <div className="absolute top-2 left-2 bg-red-500 text-white px-2 py-1 rounded-full text-xs font-bold">
-            SALE
-          </div>
-        )}
-        {isOutOfStock && (
-          <div className="absolute top-2 left-2 bg-gray-500 text-white px-2 py-1 rounded-full text-xs font-bold">
-            OUT OF STOCK
-          </div>
-        )}
-        {isLowStock && !isOnSale && (
-          <div className="absolute top-2 left-2 bg-yellow-500 text-white px-2 py-1 rounded-full text-xs font-bold">
-            LOW STOCK
-          </div>
-        )}
+        <div className="absolute top-2 left-2 flex flex-col gap-1">
+          {pricing.isOnSale && (
+            <div className={`${getDiscountBadgeColor(pricing.urgencyLevel)} px-2 py-1 rounded-full text-xs font-bold`}>
+              {pricing.urgencyLevel === 'critical' ? 'URGENT' : 'SALE'}
+            </div>
+          )}
+          {isOutOfStock && (
+            <div className="bg-gray-500 text-white px-2 py-1 rounded-full text-xs font-bold">
+              OUT OF STOCK
+            </div>
+          )}
+          {isLowStock && !pricing.isOnSale && (
+            <div className="bg-yellow-500 text-white px-2 py-1 rounded-full text-xs font-bold">
+              LOW STOCK
+            </div>
+          )}
+        </div>
+        
+        {/* Eco-Score Badge */}
+        <div className="absolute top-3 right-3 z-10">
+          <EcoScoreBadge product={product} size="sm" compact={true} />
+        </div>
       </div>
       
       <div className="p-4">
@@ -146,11 +139,11 @@ const ProductCard: React.FC<ProductCardProps> = ({
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center space-x-2">
             <span className="text-2xl font-bold text-[#0071CE]">
-              ₹{price.toFixed(2)}
+              {formatPrice(pricing.discountedPrice)}
             </span>
-            {isOnSale && originalPrice && (
+            {pricing.isOnSale && (
               <span className="text-gray-500 line-through text-sm">
-                ₹{originalPrice.toFixed(2)}
+                {formatPrice(pricing.originalPrice)}
               </span>
             )}
           </div>
@@ -177,7 +170,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
         
         {expiration_date && (
           <div className="mt-2 text-xs text-gray-500">
-            {isOnSale ? 'Expires soon: ' : 'Expires: '}
+            {pricing.isOnSale ? 'Expires soon: ' : 'Expires: '}
             {new Date(expiration_date).toLocaleDateString()}
           </div>
         )}

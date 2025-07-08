@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { Search, ShoppingCart, User, Globe, LogOut } from 'lucide-react';
+import { Search, ShoppingCart, User, LogOut, Trophy } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useCart } from '@/contexts/CartContext';
 import CartDrawer from './CartDrawer';
@@ -92,22 +91,36 @@ const Header = () => {
             >
               Home
             </Link>
-            <Link 
-              to="/shop" 
-              className={`font-medium transition-colors ${
-                isActive('/shop') ? 'text-[#0071CE]' : 'text-gray-700 hover:text-[#0071CE]'
-              }`}
-            >
-              Shop
-            </Link>
-            <Link 
-              to="/my-impact" 
-              className={`font-medium transition-colors ${
-                isActive('/my-impact') ? 'text-[#0071CE]' : 'text-gray-700 hover:text-[#0071CE]'
-              }`}
-            >
-              My Impact
-            </Link>
+            {/* Only show these links if not admin */}
+            {(!isAdmin && !isLoading) && <>
+              <Link 
+                to="/shop" 
+                className={`font-medium transition-colors ${
+                  isActive('/shop') ? 'text-[#0071CE]' : 'text-gray-700 hover:text-[#0071CE]'
+                }`}
+              >
+                Shop
+              </Link>
+              <Link 
+                to="/my-impact" 
+                className={`font-medium transition-colors ${
+                  isActive('/my-impact') ? 'text-[#0071CE]' : 'text-gray-700 hover:text-[#0071CE]'
+                }`}
+              >
+                My Impact
+              </Link>
+              {user && (
+                <Link 
+                  to="/rewards" 
+                  className={`font-medium transition-colors flex items-center gap-1 ${
+                    isActive('/rewards') ? 'text-[#0071CE]' : 'text-gray-700 hover:text-[#0071CE]'
+                  }`}
+                >
+                  <Trophy className="h-4 w-4" />
+                  Rewards
+                </Link>
+              )}
+            </>}
             {user && isAdmin && !isLoading && (
               <Link 
                 to="/admin" 
@@ -161,20 +174,23 @@ const Header = () => {
               </DropdownMenu>
             )}
             
-            <button className="p-2 text-gray-600 hover:text-[#0071CE] transition-colors">
+            {/* Remove Globe icon button */}
+            {/* <button className="p-2 text-gray-600 hover:text-[#0071CE] transition-colors">
               <Globe className="h-5 w-5" />
-            </button>
-            
-            <CartDrawer>
-              <button className="p-2 text-gray-600 hover:text-[#0071CE] transition-colors relative">
-                <ShoppingCart className="h-5 w-5" />
-                {itemCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-[#8BC34A] text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                    {itemCount}
-                  </span>
-                )}
-              </button>
-            </CartDrawer>
+            </button> */}
+            {/* Only show cart if not admin */}
+            {(!isAdmin && !isLoading) && (
+              <CartDrawer>
+                <button className="p-2 text-gray-600 hover:text-[#0071CE] transition-colors relative">
+                  <ShoppingCart className="h-5 w-5" />
+                  {itemCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-[#8BC34A] text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                      {itemCount}
+                    </span>
+                  )}
+                </button>
+              </CartDrawer>
+            )}
           </div>
         </div>
       </div>

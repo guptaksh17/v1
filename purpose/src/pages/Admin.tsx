@@ -524,7 +524,9 @@ const AdminContent = ({ products, setProducts }: { products: Product[], setProdu
         ? parseFloat(value) || 0
         : name === 'materials'
           ? value.split(',').map((v: string) => v.trim()).filter(Boolean)
-          : value
+          : name === 'expiration_date'
+            ? value || null
+            : value
     }));
   };
 
@@ -964,6 +966,19 @@ const AdminContent = ({ products, setProducts }: { products: Product[], setProdu
                             onChange={handleInputChange}
                             placeholder="https://example.com/image.jpg"
                           />
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <Label htmlFor="product-expiration-date">Expiration Date</Label>
+                          <Input
+                            id="product-expiration-date"
+                            name="expiration_date"
+                            type="date"
+                            value={newProduct.expiration_date || ''}
+                            onChange={handleInputChange}
+                            placeholder="Select expiration date"
+                          />
+                          <p className="text-sm text-gray-500">Leave empty if product doesn't expire</p>
                         </div>
                       </div>
                     </div>

@@ -15,6 +15,7 @@ import NotFound from "./pages/NotFound";
 import React from "react";
 import Checkout from "./pages/Checkout";
 import OrderConfirmation from "./pages/OrderConfirmation";
+import Rewards from "./pages/Rewards";
 import { SessionContextProvider } from '@supabase/auth-helpers-react';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -34,6 +35,7 @@ const App = () => (
               <Route path="/my-impact" element={<MyImpact />} />
               <Route path="/checkout" element={<Checkout />} />
               <Route path="/order-confirmation" element={<OrderConfirmation />} />
+              <Route path="/rewards" element={<Rewards />} />
               <Route path="/product/:id" element={<ProductDetail />} />
               <Route path="/admin" element={<Admin />} />
               <Route path="/admin/forecast" element={<AdminForecast />} />

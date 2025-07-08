@@ -1,9 +1,12 @@
 import React, { useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { CheckCircle2, ShoppingBag, Clock, MapPin, Mail, CreditCard } from 'lucide-react';
+import { CheckCircle2, ShoppingBag, Clock, MapPin, Mail, CreditCard, Trophy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/utils';
+import { addPoints, calculatePoints } from '@/lib/gamification';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'react-hot-toast';
 
 interface OrderItem {
   id: string;
@@ -44,7 +47,24 @@ const OrderConfirmation = () => {
     // If no order data is available, redirect to home
     if (!orderData) {
       navigate('/');
+      return;
     }
+
+    // Award points for the purchase
+    const awardPoints = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const points = calculatePoints.purchase(orderData.total, true); // Assuming all products are eco-friendly
+          await addPoints(user.id, points, `Purchase: Order #${orderData.orderId}`);
+          toast.success(`🎉 You earned ${points} points for your purchase!`);
+        }
+      } catch (error) {
+        console.error('Error awarding points:', error);
+      }
+    };
+
+    awardPoints();
   }, [orderData, navigate]);
 
   if (!orderData) {
@@ -212,6 +232,33 @@ const OrderConfirmation = () => {
                   <p className="text-sm text-gray-500 mt-2">
                     A confirmation email has been sent to {orderData.customer.email}
                   </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Rewards Section */}
+            <Card className="bg-gradient-to-r from-green-50 to-blue-50 border-green-200">
+              <CardHeader>
+                <div className="flex items-center space-x-2">
+                  <Trophy className="h-5 w-5 text-green-600" />
+                  <CardTitle className="text-lg text-green-800">Rewards Earned!</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center space-y-3">
+                  <div className="text-2xl font-bold text-green-700">
+                    +{Math.floor(orderData.total / 100) * 2} Points
+                  </div>
+                  <p className="text-sm text-green-600">
+                    You earned points for your sustainable purchase!
+                  </p>
+                  <Button
+                    variant="outline"
+                    className="w-full border-green-300 text-green-700 hover:bg-green-100"
+                    onClick={() => navigate('/rewards')}
+                  >
+                    View Rewards Dashboard
+                  </Button>
                 </div>
               </CardContent>
             </Card>

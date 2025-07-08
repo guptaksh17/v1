@@ -6,9 +6,11 @@ import Header from '../components/Header';
 import ProductCard from '../components/ProductCard';
 import { Filter, ChevronDown } from 'lucide-react';
 import { supabase } from '../integrations/supabase/client';
+import { retryOperation } from '@/lib/auth-utils';
 import { Product } from '../lib/products';
 import { useCart } from '@/contexts/CartContext';
 import { toast } from 'react-hot-toast';
+import { calculateEcoScoreForProduct } from '@/lib/ecoScore';
 
 const Shop = () => {
   const navigate = useNavigate();
@@ -18,7 +20,8 @@ const Shop = () => {
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [selectedFilters, setSelectedFilters] = useState({
     category: '',
-    priceRange: ''
+    priceRange: '',
+    ecoScore: ''
   });
 
   const handleAddToCart = (e: React.MouseEvent, product: Product) => {
@@ -41,17 +44,30 @@ const Shop = () => {
   useEffect(() => {
     const loadProducts = async () => {
       try {
-        const { data, error } = await supabase
-          .from('products')
-          .select('*')
-          .order('created_at', { ascending: false });
+        const { data, error } = await retryOperation(async () => {
+          const result = await supabase
+            .from('products')
+            .select('*')
+            .order('created_at', { ascending: false });
+          
+          if (result.error) throw result.error;
+          return result;
+        });
 
-        if (error) throw error;
+        // Process products to ensure correct typing
+        const processedProducts = (data || []).map((productData: any) => {
+          let product = productData as Product;
+          if (product.carbon_footprint_breakdown && typeof product.carbon_footprint_breakdown === 'object') {
+            product.carbon_footprint_breakdown = product.carbon_footprint_breakdown as Product['carbon_footprint_breakdown'];
+          }
+          return product;
+        });
         
-        setProducts(data || []);
-        setFilteredProducts(data || []);
+        setProducts(processedProducts);
+        setFilteredProducts(processedProducts);
       } catch (error) {
         console.error('Error fetching products:', error);
+        toast.error('Failed to load products. Please check your internet connection and try again.');
       } finally {
         setIsLoading(false);
       }
@@ -105,6 +121,16 @@ const Shop = () => {
       result = result.filter(p => p.price >= min && p.price <= max);
     }
     
+    // Apply eco-score filter
+    if (selectedFilters.ecoScore) {
+      const [minScore, maxScore] = selectedFilters.ecoScore.split('-').map(Number);
+      result = result.filter(p => {
+        const ecoScore = calculateEcoScoreForProduct(p) as any;
+        const score = ecoScore.total || ecoScore.totalScore || 50;
+        return score >= minScore && score <= maxScore;
+      });
+    }
+    
     setFilteredProducts(result);
   }, [products, selectedFilters]);
 
@@ -126,6 +152,14 @@ const Shop = () => {
     { id: '500-1000', label: '₹500 - ₹1000' },
     { id: '1000-2000', label: '₹1000 - ₹2000' },
     { id: '2000-5000', label: 'Over ₹2000' }
+  ];
+
+  const ecoScoreRanges = [
+    { id: '80-100', label: 'A+ to A (80-100)', grade: 'A+' },
+    { id: '70-79', label: 'B (70-79)', grade: 'B' },
+    { id: '60-69', label: 'C (60-69)', grade: 'C' },
+    { id: '50-59', label: 'D (50-59)', grade: 'D' },
+    { id: '0-49', label: 'E to F (0-49)', grade: 'F' }
   ];
 
   return (
@@ -212,10 +246,45 @@ const Shop = () => {
                 </div>
               </div>
               
+              <div className="border rounded-lg p-4">
+                <h3 className="font-medium mb-3">Eco-Score</h3>
+                <div className="space-y-2">
+                  {ecoScoreRanges.map(range => (
+                    <div key={range.id} className="flex items-center">
+                      <input
+                        type="radio"
+                        id={range.id}
+                        name="ecoScore"
+                        className="h-4 w-4 text-green-600 focus:ring-green-500"
+                        checked={selectedFilters.ecoScore === range.id}
+                        onChange={() => setSelectedFilters(prev => ({
+                          ...prev,
+                          ecoScore: prev.ecoScore === range.id ? '' : range.id
+                        }))}
+                      />
+                      <label 
+                        htmlFor={range.id} 
+                        className="ml-2 text-sm text-gray-700 flex items-center"
+                      >
+                        <span className={`inline-block w-3 h-3 rounded-full mr-2 ${
+                          range.grade === 'A+' ? 'bg-green-500' :
+                          range.grade === 'B' ? 'bg-yellow-500' :
+                          range.grade === 'C' ? 'bg-orange-500' :
+                          range.grade === 'D' ? 'bg-red-500' :
+                          'bg-gray-500'
+                        }`}></span>
+                        {range.label}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              
               <button 
                 onClick={() => setSelectedFilters({
                   category: '',
-                  priceRange: ''
+                  priceRange: '',
+                  ecoScore: ''
                 })}
                 className="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 font-medium py-2 px-4 rounded-md transition-colors"
               >
